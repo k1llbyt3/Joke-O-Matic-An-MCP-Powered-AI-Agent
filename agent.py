@@ -16,11 +16,8 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# Absolute path to server.py — works regardless of working directory on Cloud Run
+# Absolute path to server.py + same Python binary = no path/env issues on Cloud Run
 SERVER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")
-
-# Use sys.executable so we always use the SAME python that's running agent.py
-# This guarantees all installed packages (mcp, etc.) are available to server.py
 PYTHON_EXECUTABLE = sys.executable
 
 HTML_TEMPLATE = """
@@ -133,55 +130,51 @@ async def root(q: str = Query(None)):
     current_session = f"session_{uuid.uuid4().hex[:8]}"
 
     try:
-        # AsyncExitStack is the correct way to manage McpToolset lifecycle.
-        # McpToolset doesn't support `async with` directly — it exposes
-        # close() which exit_stack calls automatically on exit.
-        async with AsyncExitStack() as exit_stack:
-
-            mcp_toolset = McpToolset(
-                connection_params=StdioConnectionParams(
-                    server_params=StdioServerParameters(
-                        command=PYTHON_EXECUTABLE,
-                        args=[SERVER_PATH]
-                    )
+        # THE CORRECT PATTERN: McpToolset.from_server() returns (tools_list, exit_stack)
+        # McpToolset() constructor does NOT support async context manager — from_server() does.
+        tools, exit_stack = await McpToolset.from_server(
+            connection_params=StdioConnectionParams(
+                server_params=StdioServerParameters(
+                    command=PYTHON_EXECUTABLE,
+                    args=[SERVER_PATH]
                 )
             )
-            await exit_stack.enter_async_context(mcp_toolset)
+        )
 
+        async with exit_stack:
             agent = Agent(
                 model='gemini-2.5-flash',
                 name='Joke_Agent',
                 instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
-                tools=[mcp_toolset]
+                tools=tools
             )
 
             adk_app = App(name="joke_app", root_agent=agent)
 
-            runner = InMemoryRunner(app=adk_app)
-            await exit_stack.enter_async_context(runner)
+            async with InMemoryRunner(app=adk_app) as runner:
 
-            await runner.session_service.create_session(
-                app_name="joke_app",
-                user_id="web_user_99",
-                session_id=current_session
-            )
+                await runner.session_service.create_session(
+                    app_name="joke_app",
+                    user_id="web_user_99",
+                    session_id=current_session
+                )
 
-            final_text = ""
+                final_text = ""
 
-            async for event in runner.run_async(
-                new_message=adk_message,
-                user_id="web_user_99",
-                session_id=current_session
-            ):
-                if hasattr(event, 'content') and event.content and event.content.parts:
-                    final_text = event.content.parts[0].text
-                elif hasattr(event, 'text') and event.text:
-                    final_text = event.text
+                async for event in runner.run_async(
+                    new_message=adk_message,
+                    user_id="web_user_99",
+                    session_id=current_session
+                ):
+                    if hasattr(event, 'content') and event.content and event.content.parts:
+                        final_text = event.content.parts[0].text
+                    elif hasattr(event, 'text') and event.text:
+                        final_text = event.text
 
-            if not final_text:
-                final_text = "I'm speechless! Could you ask me that again?"
+                if not final_text:
+                    final_text = "I'm speechless! Could you ask me that again?"
 
-            return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
+                return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
 
     except Exception as e:
         error_details = traceback.format_exc().replace('\n', '<br>')
