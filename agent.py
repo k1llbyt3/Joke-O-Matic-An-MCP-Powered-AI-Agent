@@ -1,6 +1,7 @@
 import os
 import uuid
 import warnings
+import traceback
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from google.adk.agents.llm_agent import Agent
@@ -13,7 +14,7 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# 1. Setup the MCP Tool Connection
+# 1. MCP Tool Connection
 mcp_toolset = McpToolset(
     connection_params=StdioConnectionParams(
         server_params=StdioServerParameters(
@@ -23,7 +24,7 @@ mcp_toolset = McpToolset(
     )
 )
 
-# 2. Setup the Agent
+# 2. Agent Setup
 agent = Agent(
     model='gemini-2.5-flash', 
     name='Joke_Agent',
@@ -33,7 +34,7 @@ agent = Agent(
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# 3. Super Sleek Interactive UI
+# 3. Interactive UI Template
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -134,42 +135,39 @@ async def root(q: str = Query(None)):
     if not q:
         return HTML_TEMPLATE.format(ai_response="Hello! I am your AI Comedian. Type a prompt below to get started!")
 
-    # Format the prompt properly for the ADK
+    # Format the prompt properly with a role
     adk_message = types.Content(
         role="user",
         parts=[types.Part.from_text(text=q)]
     )
     
-    # Generate a unique session ID for this specific chat interaction
     current_session = f"session_{uuid.uuid4().hex[:8]}"
     
     try:
         async with InMemoryRunner(app=adk_app) as runner:
-            
-            # THE FIX: We must explicitly create the session in the runner's memory before calling run()
-            await runner.session_service.create_session(
-                app_name="joke_app",
-                user_id="web_user_99",
-                session_id=current_session
-            )
-            
             final_text = ""
-            # Now the run command will succeed because the session exists!
-            for event in runner.run(
+            
+            # THE FIX: Using run_async() natively aligns with FastAPI and prevents Thread crashes
+            async for event in runner.run_async(
                 new_message=adk_message,
                 user_id="web_user_99",
                 session_id=current_session
             ):
-                # Safely extract the text from the event stream
                 if hasattr(event, 'content') and event.content and event.content.parts:
                     final_text = event.content.parts[0].text
                 elif hasattr(event, 'text') and event.text:
                     final_text = event.text
             
+            # Fallback just in case the AI returns empty
+            if not final_text:
+                final_text = "I'm speechless! Could you ask me that again?"
+                
             return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
             
     except Exception as e:
-        return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{str(e)}</p></body></html>"
+        # This will print the EXACT error line if anything goes wrong
+        error_details = traceback.format_exc().replace('\n', '<br>')
+        return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{error_details}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
