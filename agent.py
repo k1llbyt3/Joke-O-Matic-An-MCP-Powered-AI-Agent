@@ -3,20 +3,21 @@ import sys
 import uuid
 import warnings
 import traceback
-from contextlib import AsyncExitStack
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
-from google.adk.agents.llm_agent import Agent
+from google.adk.agents import Agent
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
-from google.adk.apps import App
-from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# Absolute path to server.py + same Python binary = no path/env issues on Cloud Run
+APP_NAME = "joke_app"
+
+# Use the exact same Python binary and absolute path to server.py
 SERVER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")
 PYTHON_EXECUTABLE = sys.executable
 
@@ -127,12 +128,12 @@ async def root(q: str = Query(None)):
         parts=[types.Part.from_text(text=q)]
     )
 
-    current_session = f"session_{uuid.uuid4().hex[:8]}"
+    current_session_id = f"session_{uuid.uuid4().hex[:8]}"
+    user_id = "web_user_99"
 
     try:
-        # THE CORRECT PATTERN: McpToolset.from_server() returns (tools_list, exit_stack)
-        # McpToolset() constructor does NOT support async context manager — from_server() does.
-        tools, exit_stack = await McpToolset.from_server(
+        # Create a fresh MCPToolset per request (new subprocess each time)
+        mcp_toolset = McpToolset(
             connection_params=StdioConnectionParams(
                 server_params=StdioServerParameters(
                     command=PYTHON_EXECUTABLE,
@@ -141,40 +142,48 @@ async def root(q: str = Query(None)):
             )
         )
 
-        async with exit_stack:
-            agent = Agent(
-                model='gemini-2.5-flash',
-                name='Joke_Agent',
-                instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
-                tools=tools
-            )
+        # Build agent with toolset passed directly in tools list
+        agent = Agent(
+            model='gemini-2.5-flash',
+            name='Joke_Agent',
+            instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
+            tools=[mcp_toolset]
+        )
 
-            adk_app = App(name="joke_app", root_agent=agent)
+        # Use Runner + InMemorySessionService directly (most stable pattern for FastAPI)
+        session_service = InMemorySessionService()
 
-            async with InMemoryRunner(app=adk_app) as runner:
+        runner = Runner(
+            agent=agent,
+            app_name=APP_NAME,
+            session_service=session_service,
+        )
 
-                await runner.session_service.create_session(
-                    app_name="joke_app",
-                    user_id="web_user_99",
-                    session_id=current_session
-                )
+        # Create session first, then run
+        await session_service.create_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=current_session_id
+        )
 
-                final_text = ""
+        final_text = ""
 
-                async for event in runner.run_async(
-                    new_message=adk_message,
-                    user_id="web_user_99",
-                    session_id=current_session
-                ):
-                    if hasattr(event, 'content') and event.content and event.content.parts:
-                        final_text = event.content.parts[0].text
-                    elif hasattr(event, 'text') and event.text:
-                        final_text = event.text
+        async for event in runner.run_async(
+            new_message=adk_message,
+            user_id=user_id,
+            session_id=current_session_id
+        ):
+            if hasattr(event, 'content') and event.content and event.content.parts:
+                for part in event.content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        final_text = part.text
+            elif hasattr(event, 'text') and event.text:
+                final_text = event.text
 
-                if not final_text:
-                    final_text = "I'm speechless! Could you ask me that again?"
+        if not final_text:
+            final_text = "I'm speechless! Could you ask me that again?"
 
-                return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
+        return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
 
     except Exception as e:
         error_details = traceback.format_exc().replace('\n', '<br>')
