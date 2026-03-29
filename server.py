@@ -2,7 +2,6 @@ import urllib.request
 import json
 from mcp.server.fastmcp import FastMCP
 
-# SSE transport runs as an HTTP server — works on Cloud Run unlike stdio
 mcp = FastMCP("JokeServer")
 
 @mcp.tool()
@@ -16,5 +15,5 @@ def get_random_joke() -> str:
         return "Could not fetch a joke right now. Please try again later."
 
 if __name__ == "__main__":
-    # Run as SSE server on port 8081
+    # SSE transport - runs as HTTP server, works on Cloud Run
     mcp.run(transport="sse", host="0.0.0.0", port=8081)

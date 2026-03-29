@@ -7,11 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# start.sh launches both the MCP SSE server and the FastAPI app
-RUN echo '#!/bin/sh\npython server.py &\nsleep 2\nuvicorn agent:app --host 0.0.0.0 --port ${PORT:-8080}' > /workspace/start.sh
-RUN chmod +x /workspace/start.sh
-
-ENV PORT=8080
-EXPOSE 8080
-
-CMD ["/workspace/start.sh"]
+# Start MCP SSE server in background, wait for it, then start FastAPI
+CMD ["sh", "-c", "python server.py & sleep 3 && uvicorn agent:app --host 0.0.0.0 --port ${PORT:-8080}"]
