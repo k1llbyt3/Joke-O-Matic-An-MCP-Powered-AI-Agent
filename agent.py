@@ -7,7 +7,6 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionPar
 from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
 
-# Hide the noisy background logs
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
@@ -32,7 +31,7 @@ agent = Agent(
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# 3. Premium UI Template (CSS with doubled-braces for build safety)
+# UI Template (CSS with doubled-braces for build safety)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -86,9 +85,7 @@ HTML_TEMPLATE = """
             text-decoration: none;
             font-weight: 600;
             display: inline-block;
-            transition: transform 0.2s;
         }}
-        .btn:hover {{ transform: scale(1.05); }}
     </style>
 </head>
 <body>
@@ -107,25 +104,24 @@ HTML_TEMPLATE = """
 async def root():
     try:
         async with InMemoryRunner(app=adk_app) as runner:
-            final_text = ""
-            # FIX: Using a standard 'for' loop because runner.run returns a sync generator
-            # We also include the mandatory user_id and session_id keyword arguments
-            for step in runner.run(
+            # We call the generator
+            joke_generator = runner.run(
                 new_message="Tell me a joke!",
                 user_id="user_123",
                 session_id="session_456"
-            ):
-                # We update the text as the generator yields each chunk
-                final_text = step.text
+            )
             
-            # Format and return the UI
-            return HTML_TEMPLATE.format(joke_content=final_text.replace('\n', '<br>'))
+            # We manually drain the generator to get the final text
+            final_text = "Wait, the comedian is still thinking..."
+            for step in joke_generator:
+                if hasattr(step, 'text') and step.text:
+                    final_text = step.text
+            
+            return HTML_TEMPLATE.format(joke_content=final_text.replace('\\n', '<br>'))
     except Exception as e:
-        # High-visibility error reporting for debugging
         return f"<html><body style='background:#0f172a;color:white;'><h1>Agent Error</h1><p>{str(e)}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
-    # Use the PORT environment variable provided by Google Cloud Run
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
