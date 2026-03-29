@@ -1,17 +1,18 @@
 import os
 import warnings
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
 from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
+from google.genai import types  # <--- THIS FIXES THE 'ROLE' ERROR!
 
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# 1. MCP Setup
+# 1. Setup the MCP Tool Connection
 mcp_toolset = McpToolset(
     connection_params=StdioConnectionParams(
         server_params=StdioServerParameters(
@@ -21,28 +22,28 @@ mcp_toolset = McpToolset(
     )
 )
 
-# 2. Agent Setup
+# 2. Setup the Agent
 agent = Agent(
     model='gemini-2.5-flash', 
     name='Joke_Agent',
-    instruction="You are a world-class AI stand-up comedian. Use the get_random_joke tool and deliver it with flair!",
+    instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
     tools=[mcp_toolset]
 )
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# UI Template (CSS with doubled-braces for build safety)
+# 3. Super Sleek Interactive UI
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Joke-O-Matic 9000</title>
+    <title>AI Agent | MCP Dashboard</title>
     <style>
-        :root {{ --primary: #8b5cf6; --secondary: #ec4899; }}
+        :root {{ --primary: #00d2ff; --secondary: #3a7bd5; }}
         body {{
-            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-            color: #f8fafc;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #ffffff;
             font-family: 'Segoe UI', sans-serif;
             display: flex;
             justify-content: center;
@@ -50,76 +51,112 @@ HTML_TEMPLATE = """
             min-height: 100vh;
             margin: 0;
         }}
-        .glass-card {{
+        .dashboard {{
             background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 3rem;
+            border-radius: 20px;
+            padding: 2.5rem;
             width: 90%;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 600px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
         }}
         h1 {{
-            background: linear-gradient(to right, #a78bfa, #f472b6);
+            margin-top: 0;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-size: 2.5rem;
-            margin: 0 0 1rem 0;
+            text-align: center;
+            font-size: 2.2rem;
         }}
-        .joke-container {{
-            background: rgba(15, 23, 42, 0.5);
-            padding: 1.5rem;
-            border-radius: 12px;
-            margin: 1.5rem 0;
+        .chat-bubble {{
+            background: rgba(0, 0, 0, 0.3);
             border-left: 4px solid var(--primary);
-            text-align: left;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            font-size: 1.1rem;
             line-height: 1.6;
+            min-height: 50px;
         }}
-        .btn {{
-            background: linear-gradient(to right, var(--primary), var(--secondary));
+        form {{
+            display: flex;
+            gap: 10px;
+        }}
+        input[type="text"] {{
+            flex: 1;
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.2);
             color: white;
+            font-size: 1rem;
+            outline: none;
+        }}
+        input[type="text"]:focus {{
+            border-color: var(--primary);
+        }}
+        button {{
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            border: none;
             padding: 1rem 2rem;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-block;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.3s;
+        }}
+        button:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4);
         }}
     </style>
 </head>
 <body>
-    <div class="glass-card">
-        <h1>Joke-O-Matic</h1>
-        <div class="joke-container">
-            <p>{joke_content}</p>
+    <div class="dashboard">
+        <h1>Joke-O-Matic AI</h1>
+        <div class="chat-bubble">
+            {ai_response}
         </div>
-        <a href="/" class="btn">New Joke ✨</a>
+        <form action="/" method="get">
+            <input type="text" name="q" placeholder="Type your prompt here..." required autocomplete="off">
+            <button type="submit">Ask</button>
+        </form>
     </div>
 </body>
 </html>
 """
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def root(q: str = Query(None)):
+    # 1. If the user hasn't typed anything yet, show a welcome message!
+    if not q:
+        return HTML_TEMPLATE.format(ai_response="Hello! I am your AI Comedian. Type a prompt below to get started!")
+
+    # 2. THE FIX: Wrap the plain text into a formal Content object so ADK recognizes the 'role'
+    adk_message = types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=q)]
+    )
+    
     try:
         async with InMemoryRunner(app=adk_app) as runner:
-            # We call the generator
-            joke_generator = runner.run(
-                new_message="Tell me a joke!",
-                user_id="user_123",
-                session_id="session_456"
-            )
+            final_text = ""
+            for event in runner.run(
+                new_message=adk_message,
+                user_id="web_user_99",
+                session_id="session_99"
+            ):
+                # Extract the final text securely from the event
+                if hasattr(event, 'content') and event.content and event.content.parts:
+                    final_text = event.content.parts[0].text
+                elif hasattr(event, 'text') and event.text:
+                    final_text = event.text
             
-            # We manually drain the generator to get the final text
-            final_text = "Wait, the comedian is still thinking..."
-            for step in joke_generator:
-                if hasattr(step, 'text') and step.text:
-                    final_text = step.text
-            
-            return HTML_TEMPLATE.format(joke_content=final_text.replace('\\n', '<br>'))
+            return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
     except Exception as e:
-        return f"<html><body style='background:#0f172a;color:white;'><h1>Agent Error</h1><p>{str(e)}</p></body></html>"
+        return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{str(e)}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
