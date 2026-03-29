@@ -2,10 +2,9 @@ import urllib.request
 import json
 from mcp.server.fastmcp import FastMCP
 
-# Creates the MCP server
+# SSE transport runs as an HTTP server — works on Cloud Run unlike stdio
 mcp = FastMCP("JokeServer")
 
-# The @mcp.tool decorator exposes this function to your AI agent
 @mcp.tool()
 def get_random_joke() -> str:
     """Fetches a random joke from a public API."""
@@ -17,4 +16,5 @@ def get_random_joke() -> str:
         return "Could not fetch a joke right now. Please try again later."
 
 if __name__ == "__main__":
-    mcp.run()
+    # Run as SSE server on port 8081
+    mcp.run(transport="sse", host="0.0.0.0", port=8081)

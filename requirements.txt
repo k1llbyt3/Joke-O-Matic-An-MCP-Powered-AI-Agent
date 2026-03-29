@@ -1,5 +1,4 @@
 google-adk
-mcp
-requests
+mcp[cli]
 fastapi
 uvicorn

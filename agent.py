@@ -1,5 +1,4 @@
 import os
-import sys
 import uuid
 import warnings
 import traceback
@@ -8,18 +7,16 @@ from fastapi.responses import HTMLResponse
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseServerParams
 from google.genai import types
 
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
-
 APP_NAME = "joke_app"
 
-# Use the exact same Python binary and absolute path to server.py
-SERVER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")
-PYTHON_EXECUTABLE = sys.executable
+# MCP server runs as SSE on localhost:8081 (same container, different port)
+MCP_SERVER_URL = "http://localhost:8081/sse"
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -116,6 +113,9 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# Session service created once at startup
+session_service = InMemorySessionService()
+
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
     if not q:
@@ -129,29 +129,19 @@ async def root(q: str = Query(None)):
     )
 
     current_session_id = f"session_{uuid.uuid4().hex[:8]}"
-    user_id = "web_user_99"
 
     try:
-        # Create a fresh MCPToolset per request (new subprocess each time)
+        # Connect to MCP server via SSE (HTTP) — reliable on Cloud Run
         mcp_toolset = McpToolset(
-            connection_params=StdioConnectionParams(
-                server_params=StdioServerParameters(
-                    command=PYTHON_EXECUTABLE,
-                    args=[SERVER_PATH]
-                )
-            )
+            connection_params=SseServerParams(url=MCP_SERVER_URL)
         )
 
-        # Build agent with toolset passed directly in tools list
         agent = Agent(
             model='gemini-2.5-flash',
             name='Joke_Agent',
-            instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
+            instruction="You are a witty AI comedian. If the user asks for a joke, use your get_random_joke tool. Otherwise, just chat with them normally.",
             tools=[mcp_toolset]
         )
-
-        # Use Runner + InMemorySessionService directly (most stable pattern for FastAPI)
-        session_service = InMemorySessionService()
 
         runner = Runner(
             agent=agent,
@@ -159,10 +149,9 @@ async def root(q: str = Query(None)):
             session_service=session_service,
         )
 
-        # Create session first, then run
         await session_service.create_session(
             app_name=APP_NAME,
-            user_id=user_id,
+            user_id="web_user_99",
             session_id=current_session_id
         )
 
@@ -170,7 +159,7 @@ async def root(q: str = Query(None)):
 
         async for event in runner.run_async(
             new_message=adk_message,
-            user_id=user_id,
+            user_id="web_user_99",
             session_id=current_session_id
         ):
             if hasattr(event, 'content') and event.content and event.content.parts:
