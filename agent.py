@@ -1,4 +1,5 @@
 import os
+import uuid
 import warnings
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
@@ -6,7 +7,7 @@ from google.adk.agents.llm_agent import Agent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
 from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
-from google.genai import types  # <--- THIS FIXES THE 'ROLE' ERROR!
+from google.genai import types
 
 warnings.filterwarnings("ignore")
 
@@ -130,31 +131,43 @@ HTML_TEMPLATE = """
 
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
-    # 1. If the user hasn't typed anything yet, show a welcome message!
     if not q:
         return HTML_TEMPLATE.format(ai_response="Hello! I am your AI Comedian. Type a prompt below to get started!")
 
-    # 2. THE FIX: Wrap the plain text into a formal Content object so ADK recognizes the 'role'
+    # Format the prompt properly for the ADK
     adk_message = types.Content(
         role="user",
         parts=[types.Part.from_text(text=q)]
     )
     
+    # Generate a unique session ID for this specific chat interaction
+    current_session = f"session_{uuid.uuid4().hex[:8]}"
+    
     try:
         async with InMemoryRunner(app=adk_app) as runner:
+            
+            # THE FIX: We must explicitly create the session in the runner's memory before calling run()
+            await runner.session_service.create_session(
+                app_name="joke_app",
+                user_id="web_user_99",
+                session_id=current_session
+            )
+            
             final_text = ""
+            # Now the run command will succeed because the session exists!
             for event in runner.run(
                 new_message=adk_message,
                 user_id="web_user_99",
-                session_id="session_99"
+                session_id=current_session
             ):
-                # Extract the final text securely from the event
+                # Safely extract the text from the event stream
                 if hasattr(event, 'content') and event.content and event.content.parts:
                     final_text = event.content.parts[0].text
                 elif hasattr(event, 'text') and event.text:
                     final_text = event.text
             
             return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
+            
     except Exception as e:
         return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{str(e)}</p></body></html>"
 
