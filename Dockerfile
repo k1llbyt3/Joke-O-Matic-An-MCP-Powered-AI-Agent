@@ -7,5 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Start MCP SSE server in background, wait for it, then start FastAPI
+ENV PORT=8080
+EXPOSE 8080
+
+# Start MCP server in background, wait 3s for it to be ready, then start FastAPI
 CMD ["sh", "-c", "python server.py & sleep 3 && uvicorn agent:app --host 0.0.0.0 --port ${PORT:-8080}"]

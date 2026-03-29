@@ -1,5 +1,6 @@
 import urllib.request
 import json
+import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("JokeServer")
@@ -15,5 +16,6 @@ def get_random_joke() -> str:
         return "Could not fetch a joke right now. Please try again later."
 
 if __name__ == "__main__":
-    # SSE transport - runs as HTTP server, works on Cloud Run
-    mcp.run(transport="sse", host="0.0.0.0", port=8081)
+    # Use uvicorn directly — more stable than mcp.run() in containers
+    mcp_app = mcp.get_asgi_app()
+    uvicorn.run(mcp_app, host="0.0.0.0", port=8081)
