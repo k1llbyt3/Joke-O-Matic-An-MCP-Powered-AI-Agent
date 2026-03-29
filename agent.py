@@ -30,7 +30,7 @@ agent = Agent(
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# UI Template with FIXED double-braces for CSS
+# UI Template with double-braces to avoid build errors
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -58,30 +58,35 @@ HTML_TEMPLATE = """
             width: 90%;
             max-width: 500px;
             text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }}
         h1 {{
             background: linear-gradient(to right, #a78bfa, #f472b6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-size: 2.5rem;
+            margin: 0;
         }}
         .joke-container {{
             background: rgba(15, 23, 42, 0.5);
             padding: 1.5rem;
             border-radius: 12px;
-            margin: 1.5rem 0;
+            margin: 2rem 0;
             border-left: 4px solid var(--primary);
             text-align: left;
+            line-height: 1.6;
         }}
         .btn {{
             background: linear-gradient(to right, var(--primary), var(--secondary));
             color: white;
-            padding: 0.8rem 1.8rem;
-            border-radius: 10px;
+            padding: 1rem 2rem;
+            border-radius: 12px;
             text-decoration: none;
             font-weight: 600;
             display: inline-block;
+            transition: 0.3s;
         }}
+        .btn:hover {{ transform: translateY(-2px); }}
     </style>
 </head>
 <body>
@@ -100,15 +105,19 @@ HTML_TEMPLATE = """
 async def root():
     try:
         async with InMemoryRunner(app=adk_app) as runner:
-            # FIXED: Passing mandatory keyword arguments per your error logs
-            response = await runner.run(
+            final_response = ""
+            # FIX: We iterate through the generator to get the final joke text
+            async for step in runner.run(
                 new_message="Tell me a joke!",
                 user_id="user_123",
                 session_id="session_456"
-            )
-            return HTML_TEMPLATE.format(joke_content=response.text.replace('\n', '<br>'))
+            ):
+                # The 'step' contains the current state of the response
+                final_response = step.text
+            
+            return HTML_TEMPLATE.format(joke_content=final_response.replace('\n', '<br>'))
     except Exception as e:
-        return f"<html><body><h1>Agent Error</h1><p>{str(e)}</p></body></html>"
+        return f"<html><body style='background:#0f172a;color:white;'><h1>Agent Error</h1><p>{str(e)}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
