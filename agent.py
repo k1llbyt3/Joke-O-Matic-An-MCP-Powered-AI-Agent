@@ -14,26 +14,6 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# 1. MCP Tool Connection
-mcp_toolset = McpToolset(
-    connection_params=StdioConnectionParams(
-        server_params=StdioServerParameters(
-            command="python", 
-            args=["server.py"]
-        )
-    )
-)
-
-# 2. Agent Setup
-agent = Agent(
-    model='gemini-2.5-flash', 
-    name='Joke_Agent',
-    instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
-    tools=[mcp_toolset]
-)
-
-adk_app = App(name="joke_app", root_agent=agent)
-
 # 3. Interactive UI Template
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -133,49 +113,70 @@ HTML_TEMPLATE = """
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
     if not q:
-        return HTML_TEMPLATE.format(ai_response="Welcome to the Joke-O-Matic 9000! I was going to tell a joke about a blunt pencil, but there’s no point—so give me a prompt and let's see if I can do better!")
+        return HTML_TEMPLATE.format(
+            ai_response="Welcome to the Joke-O-Matic 9000! I was going to tell a joke about a blunt pencil, but there's no point—so give me a prompt and let's see if I can do better!"
+        )
 
-    # Format the prompt properly
     adk_message = types.Content(
         role="user",
         parts=[types.Part.from_text(text=q)]
     )
-    
+
     current_session = f"session_{uuid.uuid4().hex[:8]}"
-    
+
     try:
-        async with InMemoryRunner(app=adk_app) as runner:
-            
-            # --- THE MISSING FIX --- 
-            # We MUST explicitly create the session in memory before calling run_async
-            await runner.session_service.create_session(
-                app_name="joke_app",
-                user_id="web_user_99",
-                session_id=current_session
+        # KEY FIX: Create a fresh McpToolset per request using async context manager.
+        # A single global McpToolset shares one stdio subprocess across all requests,
+        # but the subprocess exits after the first use, causing "Connection closed"
+        # on every subsequent request. Creating it fresh each time gives each request
+        # its own clean subprocess lifecycle.
+        async with McpToolset(
+            connection_params=StdioConnectionParams(
+                server_params=StdioServerParameters(
+                    command="python",
+                    args=["server.py"]
+                )
             )
-            # -----------------------
-            
-            final_text = ""
-            
-            # Now run_async will succeed because it can find the session we just created!
-            async for event in runner.run_async(
-                new_message=adk_message,
-                user_id="web_user_99",
-                session_id=current_session
-            ):
-                if hasattr(event, 'content') and event.content and event.content.parts:
-                    final_text = event.content.parts[0].text
-                elif hasattr(event, 'text') and event.text:
-                    final_text = event.text
-            
-            if not final_text:
-                final_text = "I'm speechless! Could you ask me that again?"
-                
-            return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
-            
+        ) as mcp_toolset:
+
+            agent = Agent(
+                model='gemini-2.5-flash',
+                name='Joke_Agent',
+                instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, just chat with them normally.",
+                tools=[mcp_toolset]
+            )
+
+            adk_app = App(name="joke_app", root_agent=agent)
+
+            async with InMemoryRunner(app=adk_app) as runner:
+
+                await runner.session_service.create_session(
+                    app_name="joke_app",
+                    user_id="web_user_99",
+                    session_id=current_session
+                )
+
+                final_text = ""
+
+                async for event in runner.run_async(
+                    new_message=adk_message,
+                    user_id="web_user_99",
+                    session_id=current_session
+                ):
+                    if hasattr(event, 'content') and event.content and event.content.parts:
+                        final_text = event.content.parts[0].text
+                    elif hasattr(event, 'text') and event.text:
+                        final_text = event.text
+
+                if not final_text:
+                    final_text = "I'm speechless! Could you ask me that again?"
+
+                return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
+
     except Exception as e:
         error_details = traceback.format_exc().replace('\n', '<br>')
         return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{error_details}</p></body></html>"
+
 
 if __name__ == "__main__":
     import uvicorn
