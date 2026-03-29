@@ -7,11 +7,12 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionPar
 from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
 
+# Hide the noisy background logs
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# Connects to your server.py MCP tool
+# 1. MCP Setup
 mcp_toolset = McpToolset(
     connection_params=StdioConnectionParams(
         server_params=StdioServerParameters(
@@ -21,6 +22,7 @@ mcp_toolset = McpToolset(
     )
 )
 
+# 2. Agent Setup
 agent = Agent(
     model='gemini-2.5-flash', 
     name='Joke_Agent',
@@ -30,7 +32,7 @@ agent = Agent(
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# UI Template with double-braces to avoid build errors
+# 3. Premium UI Template (CSS with doubled-braces for build safety)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -42,7 +44,7 @@ HTML_TEMPLATE = """
         body {{
             background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
             color: #f8fafc;
-            font-family: sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -65,13 +67,13 @@ HTML_TEMPLATE = """
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-size: 2.5rem;
-            margin: 0;
+            margin: 0 0 1rem 0;
         }}
         .joke-container {{
             background: rgba(15, 23, 42, 0.5);
             padding: 1.5rem;
             border-radius: 12px;
-            margin: 2rem 0;
+            margin: 1.5rem 0;
             border-left: 4px solid var(--primary);
             text-align: left;
             line-height: 1.6;
@@ -84,9 +86,9 @@ HTML_TEMPLATE = """
             text-decoration: none;
             font-weight: 600;
             display: inline-block;
-            transition: 0.3s;
+            transition: transform 0.2s;
         }}
-        .btn:hover {{ transform: translateY(-2px); }}
+        .btn:hover {{ transform: scale(1.05); }}
     </style>
 </head>
 <body>
@@ -105,21 +107,25 @@ HTML_TEMPLATE = """
 async def root():
     try:
         async with InMemoryRunner(app=adk_app) as runner:
-            final_response = ""
-            # FIX: We iterate through the generator to get the final joke text
-            async for step in runner.run(
+            final_text = ""
+            # FIX: Using a standard 'for' loop because runner.run returns a sync generator
+            # We also include the mandatory user_id and session_id keyword arguments
+            for step in runner.run(
                 new_message="Tell me a joke!",
                 user_id="user_123",
                 session_id="session_456"
             ):
-                # The 'step' contains the current state of the response
-                final_response = step.text
+                # We update the text as the generator yields each chunk
+                final_text = step.text
             
-            return HTML_TEMPLATE.format(joke_content=final_response.replace('\n', '<br>'))
+            # Format and return the UI
+            return HTML_TEMPLATE.format(joke_content=final_text.replace('\n', '<br>'))
     except Exception as e:
+        # High-visibility error reporting for debugging
         return f"<html><body style='background:#0f172a;color:white;'><h1>Agent Error</h1><p>{str(e)}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
+    # Use the PORT environment variable provided by Google Cloud Run
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
