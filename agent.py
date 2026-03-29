@@ -37,7 +37,7 @@ adk_app = App(name="joke_app", root_agent=agent)
 async def root():
     # This runs the agent and formats the output for a web browser!
     async with InMemoryRunner(app=adk_app) as runner:
-        response = await runner.run("Tell me a joke!")
+        response = await runner.run(new_message="Tell me a joke!")
         html_joke = response.text.replace("\n", "<br>")
         return f"<h1>🤖 The Joke-O-Matic 9000</h1><p>{html_joke}</p>"
 
