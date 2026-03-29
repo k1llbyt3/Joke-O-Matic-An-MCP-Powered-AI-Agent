@@ -35,10 +35,17 @@ adk_app = App(name="joke_app", root_agent=agent)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    # This runs the agent and formats the output for a web browser!
+    # We now provide the 3 mandatory keyword arguments:
+    # 1. new_message: Your actual question
+    # 2. user_id: A placeholder name for the user
+    # 3. session_id: A placeholder for this specific chat session
     async with InMemoryRunner(app=adk_app) as runner:
-        response = await runner.run(new_message="Tell me a joke!")
-        html_joke = response.text.replace("\n", "<br>")
+        response = await runner.run(
+            new_message="Tell me a joke!",
+            user_id="web_user",
+            session_id="session_001"
+        )
+        html_joke = response.text.replace('\n', '<br>')
         return f"<h1>🤖 The Joke-O-Matic 9000</h1><p>{html_joke}</p>"
 
 
