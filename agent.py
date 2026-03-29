@@ -133,9 +133,9 @@ HTML_TEMPLATE = """
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
     if not q:
-        return HTML_TEMPLATE.format(ai_response="Hello! I am your AI Comedian. Type a prompt below to get started!")
+        return HTML_TEMPLATE.format(ai_response="Welcome to the Joke-O-Matic 9000! I was going to tell a joke about a blunt pencil, but there’s no point—so give me a prompt and let's see if I can do better!")
 
-    # Format the prompt properly with a role
+    # Format the prompt properly
     adk_message = types.Content(
         role="user",
         parts=[types.Part.from_text(text=q)]
@@ -145,9 +145,19 @@ async def root(q: str = Query(None)):
     
     try:
         async with InMemoryRunner(app=adk_app) as runner:
+            
+            # --- THE MISSING FIX --- 
+            # We MUST explicitly create the session in memory before calling run_async
+            await runner.session_service.create_session(
+                app_name="joke_app",
+                user_id="web_user_99",
+                session_id=current_session
+            )
+            # -----------------------
+            
             final_text = ""
             
-            # THE FIX: Using run_async() natively aligns with FastAPI and prevents Thread crashes
+            # Now run_async will succeed because it can find the session we just created!
             async for event in runner.run_async(
                 new_message=adk_message,
                 user_id="web_user_99",
@@ -158,14 +168,12 @@ async def root(q: str = Query(None)):
                 elif hasattr(event, 'text') and event.text:
                     final_text = event.text
             
-            # Fallback just in case the AI returns empty
             if not final_text:
                 final_text = "I'm speechless! Could you ask me that again?"
                 
             return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
             
     except Exception as e:
-        # This will print the EXACT error line if anything goes wrong
         error_details = traceback.format_exc().replace('\n', '<br>')
         return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{error_details}</p></body></html>"
 
