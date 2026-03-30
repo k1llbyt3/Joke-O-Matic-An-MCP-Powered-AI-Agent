@@ -2,4 +2,4 @@ google-adk
 mcp[cli]
 fastapi
 uvicorn
-requests
+sse-starlette
