@@ -2,3 +2,4 @@ google-adk
 mcp[cli]
 fastapi
 uvicorn
+requests
