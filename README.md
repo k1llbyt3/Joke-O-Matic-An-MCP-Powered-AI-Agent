@@ -4,7 +4,7 @@
 ---
 
 ## 🚀 Live Demo
-**[Experience the Comedy Here!](https://joke-o-matic-an-mcp-powered-ai-agent-859007764121.asia-south1.run.app/)**
+**[Experience the Comedy Here!](https://joke-o-matic-an-mcp-powered-ai-agent-267460236055.europe-west1.run.app/)**
 *(Hosted on Google Cloud Run)*
 
 ---
