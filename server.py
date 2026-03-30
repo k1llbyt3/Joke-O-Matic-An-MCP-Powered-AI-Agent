@@ -1,20 +1,37 @@
-import urllib.request
-import json
 import asyncio
-from mcp.server.fastmcp import FastMCP
+import requests
+from mcp.server import Server
+import mcp.types as types
+from mcp.server.stdio import stdio_server
 
-mcp = FastMCP("JokeServer")
+app = Server("joke-server")
 
-@mcp.tool()
-def get_random_joke() -> str:
-    """Fetches a random joke from a public API."""
-    try:
-        with urllib.request.urlopen("https://official-joke-api.appspot.com/random_joke") as response:
-            data = json.loads(response.read().decode())
-            return f"🎤 {data['setup']}\n\n🥁 *drumroll*...\n\n💥 {data['punchline']} 😂"
-    except Exception:
-        return "Could not fetch a joke right now. Please try again later."
+@app.list_tools()
+async def list_tools():
+    return [
+        types.Tool(
+            name="get_random_joke",
+            description="Fetches a random joke.",
+            inputSchema={"type": "object", "properties": {}}
+        )
+    ]
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict):
+    if name == "get_random_joke":
+        try:
+            resp = requests.get("https://official-joke-api.appspot.com/random_joke")
+            if resp.status_code == 200:
+                data = resp.json()
+                joke = f"{data['setup']} - {data['punchline']}"
+                return [types.TextContent(type="text", text=joke)]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+    return [types.TextContent(type="text", text="Failed to fetch joke.")]
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(read_stream, write_stream, app.create_initialization_options())
 
 if __name__ == "__main__":
-    # run_sse_async is the correct method per official ADK docs
-    asyncio.run(mcp.run_sse_async(host="0.0.0.0", port=8081))
+    asyncio.run(main())
