@@ -24,7 +24,7 @@ mcp_toolset = McpToolset(
     )
 )
 
-# 2. Upgraded Agent Instructions for Emojis and Personality
+# 2. Agent Instructions
 agent = Agent(
     model='gemini-2.5-flash', 
     name='Joke_Agent',
@@ -37,7 +37,7 @@ agent = Agent(
 
 adk_app = App(name="joke_app", root_agent=agent)
 
-# 3. Upgraded UI Template with Premium Chat Bubble
+# 3. Premium Animated UI
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -45,7 +45,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <title>AI Agent | MCP Dashboard</title>
     <style>
-        :root {{ --primary: #00d2ff; --secondary: #3a7bd5; --dark: #0f2027; }}
+        :root {{ --primary: #00d2ff; --secondary: #3a7bd5; --dark: #0f2027; --accent: #ff007f; }}
         body {{ 
             background: linear-gradient(135deg, var(--dark), #203a43, #2c5364); 
             color: #ffffff; 
@@ -80,10 +80,16 @@ HTML_TEMPLATE = """
             position: relative;
             margin: 2.5rem 0;
         }}
+        /* Floating Animation for Robot */
+        @keyframes float {{
+            0% {{ transform: translateY(0px); }}
+            50% {{ transform: translateY(-10px); }}
+            100% {{ transform: translateY(0px); }}
+        }}
         .robot-avatar {{
             position: absolute;
-            top: -20px;
-            left: -20px;
+            top: -25px;
+            left: -25px;
             font-size: 2.5rem;
             background: var(--dark);
             border: 2px solid var(--primary);
@@ -91,6 +97,12 @@ HTML_TEMPLATE = """
             padding: 10px;
             box-shadow: 0 10px 20px rgba(0,0,0,0.4);
             z-index: 10;
+            animation: float 3s ease-in-out infinite;
+        }}
+        /* Fade in for Chat Bubble */
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
         }}
         .chat-bubble {{ 
             background: rgba(15, 32, 39, 0.7); 
@@ -102,8 +114,9 @@ HTML_TEMPLATE = """
             line-height: 1.7; 
             min-height: 80px; 
             box-shadow: inset 0 4px 15px rgba(0,0,0,0.2);
+            animation: fadeIn 0.5s ease-out forwards;
         }}
-        form {{ display: flex; gap: 12px; }}
+        form {{ display: flex; gap: 12px; margin-top: 1.5rem; }}
         input[type="text"] {{ 
             flex: 1; 
             padding: 1.2rem; 
@@ -123,7 +136,7 @@ HTML_TEMPLATE = """
         button {{ 
             background: linear-gradient(135deg, var(--primary), var(--secondary)); 
             border: none; 
-            padding: 1rem 2.5rem; 
+            padding: 1rem 2rem; 
             border-radius: 12px; 
             color: white; 
             font-weight: bold; 
@@ -135,6 +148,16 @@ HTML_TEMPLATE = """
             transform: translateY(-3px); 
             box-shadow: 0 8px 25px rgba(0, 210, 255, 0.4); 
         }}
+        .btn-exit {{
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+        .btn-exit:hover {{
+            background: rgba(255, 0, 127, 0.2);
+            border-color: var(--accent);
+            box-shadow: 0 8px 25px rgba(255, 0, 127, 0.3);
+        }}
+        .thinking {{ color: #a2ffed; font-style: italic; }}
     </style>
 </head>
 <body>
@@ -143,24 +166,34 @@ HTML_TEMPLATE = """
         
         <div class="chat-container">
             <div class="robot-avatar">🤖</div>
-            <div class="chat-bubble">
+            <div class="chat-bubble" id="chatBubble">
                 {ai_response}
             </div>
         </div>
 
-        <form action="/" method="get">
+        <form action="/" method="get" id="jokeForm">
             <input type="text" name="q" placeholder="Ask for a joke..." required autocomplete="off">
-            <button type="submit">Send ✨</button>
+            <button type="submit" onclick="document.getElementById('chatBubble').innerHTML='<span class=\\'thinking\\'>Thinking of a punchline... 💭</span>'">Send ✨</button>
+            <button type="button" class="btn-exit" onclick="exitShow()">Drop Mic 🎤</button>
         </form>
     </div>
+
+    <script>
+        function exitShow() {{
+            document.getElementById('chatBubble').innerHTML = "Why did the AI cross the road? <br><br> To optimize the other side! 🤖💨 <br><br> Thanks for the laughs, catching you later!";
+            document.getElementById('jokeForm').style.display = 'none';
+        }}
+    </script>
 </body>
 </html>
 """
 
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
+    # Replaced the generic welcome with a joke!
     if not q:
-        return HTML_TEMPLATE.format(ai_response="Beep boop! ⚡ Welcome to the Joke-O-Matic 9000! Drop a prompt below and let's get this comedy show started! 🎤😎")
+        starting_joke = "Why do programmers prefer dark mode? <br><br> Because light attracts bugs! 🪲💡<br><br> Drop a prompt below and let's get this comedy show started! 🎤😎"
+        return HTML_TEMPLATE.format(ai_response=starting_joke)
 
     adk_message = types.Content(
         role="user",
