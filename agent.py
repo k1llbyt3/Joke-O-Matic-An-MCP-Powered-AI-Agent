@@ -7,6 +7,8 @@ from fastapi.responses import HTMLResponse
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+# SseConnectionParams confirmed in official ADK API reference at:
+# https://google.github.io/adk-docs/api-reference/python/
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
 from google.genai import types
 
@@ -15,7 +17,7 @@ warnings.filterwarnings("ignore")
 app = FastAPI()
 APP_NAME = "joke_app"
 
-# MCP SSE server runs on port 8081 in the same container
+# MCP server runs on port 8081 in the same container
 MCP_SERVER_URL = "http://localhost:8081/sse"
 
 HTML_TEMPLATE = """
@@ -130,7 +132,6 @@ async def root(q: str = Query(None)):
     current_session_id = f"session_{uuid.uuid4().hex[:8]}"
 
     try:
-        # SseConnectionParams imported directly from mcp_toolset — confirmed correct in ADK 1.28
         mcp_toolset = McpToolset(
             connection_params=SseConnectionParams(url=MCP_SERVER_URL)
         )

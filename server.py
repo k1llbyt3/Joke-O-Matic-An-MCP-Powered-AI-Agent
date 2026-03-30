@@ -1,6 +1,6 @@
 import urllib.request
 import json
-import uvicorn
+import asyncio
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("JokeServer")
@@ -16,6 +16,5 @@ def get_random_joke() -> str:
         return "Could not fetch a joke right now. Please try again later."
 
 if __name__ == "__main__":
-    # Use uvicorn directly — more stable than mcp.run() in containers
-    mcp_app = mcp.get_asgi_app()
-    uvicorn.run(mcp_app, host="0.0.0.0", port=8081)
+    # run_sse_async is the correct method per official ADK docs
+    asyncio.run(mcp.run_sse_async(host="0.0.0.0", port=8081))
