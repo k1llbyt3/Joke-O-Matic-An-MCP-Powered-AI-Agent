@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# Pointing directly to the file, no network connection required
+# 1. MCP Tool Connection
 mcp_toolset = McpToolset(
     connection_params=StdioConnectionParams(
         server_params=StdioServerParameters(
@@ -24,15 +24,20 @@ mcp_toolset = McpToolset(
     )
 )
 
+# 2. Upgraded Agent Instructions for Emojis and Personality
 agent = Agent(
     model='gemini-2.5-flash', 
     name='Joke_Agent',
-    instruction="You are a witty AI comedian. If the user asks for a joke, use your joke tool. Otherwise, chat with them normally.",
+    instruction="""You are a hilarious, high-energy AI comedian! 🎤✨ 
+    When the user asks for a joke, use the get_random_joke tool. 
+    Format your response beautifully: use lots of fun emojis (😂, 🥁, 💀, etc.), and put blank lines between the setup and the punchline to build suspense! 
+    If they ask for a specific joke (like knock-knock) and the tool gives you a random one, make a witty, emoji-filled excuse! ALWAYS be enthusiastic and fun.""",
     tools=[mcp_toolset]
 )
 
 adk_app = App(name="joke_app", root_agent=agent)
 
+# 3. Upgraded UI Template with Premium Chat Bubble
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -40,27 +45,112 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <title>AI Agent | MCP Dashboard</title>
     <style>
-        :root {{ --primary: #00d2ff; --secondary: #3a7bd5; }}
-        body {{ background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); color: #ffffff; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }}
-        .dashboard {{ background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 2.5rem; width: 90%; max-width: 600px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); }}
-        h1 {{ margin-top: 0; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; font-size: 2.2rem; }}
-        .chat-bubble {{ background: rgba(0, 0, 0, 0.3); border-left: 4px solid var(--primary); padding: 1.5rem; border-radius: 10px; margin: 1.5rem 0; font-size: 1.1rem; line-height: 1.6; min-height: 50px; }}
-        form {{ display: flex; gap: 10px; }}
-        input[type="text"] {{ flex: 1; padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white; font-size: 1rem; outline: none; }}
-        input[type="text"]:focus {{ border-color: var(--primary); }}
-        button {{ background: linear-gradient(to right, var(--primary), var(--secondary)); border: none; padding: 1rem 2rem; border-radius: 10px; color: white; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.3s; }}
-        button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4); }}
+        :root {{ --primary: #00d2ff; --secondary: #3a7bd5; --dark: #0f2027; }}
+        body {{ 
+            background: linear-gradient(135deg, var(--dark), #203a43, #2c5364); 
+            color: #ffffff; 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+        }}
+        .dashboard {{ 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            border-radius: 24px; 
+            padding: 3rem; 
+            width: 90%; 
+            max-width: 650px; 
+            box-shadow: 0 25px 50px rgba(0,0,0,0.6); 
+        }}
+        h1 {{ 
+            margin-top: 0; 
+            background: linear-gradient(to right, var(--primary), #a2ffed); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            text-align: center; 
+            font-size: 2.5rem; 
+            letter-spacing: 1px;
+            margin-bottom: 2rem;
+        }}
+        .chat-container {{
+            position: relative;
+            margin: 2.5rem 0;
+        }}
+        .robot-avatar {{
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            font-size: 2.5rem;
+            background: var(--dark);
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            padding: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            z-index: 10;
+        }}
+        .chat-bubble {{ 
+            background: rgba(15, 32, 39, 0.7); 
+            border-top: 2px solid rgba(255,255,255,0.1);
+            border-left: 5px solid var(--primary); 
+            padding: 2.5rem 2rem 2rem 3rem; 
+            border-radius: 16px; 
+            font-size: 1.25rem; 
+            line-height: 1.7; 
+            min-height: 80px; 
+            box-shadow: inset 0 4px 15px rgba(0,0,0,0.2);
+        }}
+        form {{ display: flex; gap: 12px; }}
+        input[type="text"] {{ 
+            flex: 1; 
+            padding: 1.2rem; 
+            border-radius: 12px; 
+            border: 1px solid rgba(255,255,255,0.15); 
+            background: rgba(0,0,0,0.3); 
+            color: white; 
+            font-size: 1.1rem; 
+            outline: none; 
+            transition: all 0.3s ease;
+        }}
+        input[type="text"]:focus {{ 
+            border-color: var(--primary); 
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+            background: rgba(0,0,0,0.5);
+        }}
+        button {{ 
+            background: linear-gradient(135deg, var(--primary), var(--secondary)); 
+            border: none; 
+            padding: 1rem 2.5rem; 
+            border-radius: 12px; 
+            color: white; 
+            font-weight: bold; 
+            font-size: 1.1rem; 
+            cursor: pointer; 
+            transition: transform 0.2s, box-shadow 0.2s; 
+        }}
+        button:hover {{ 
+            transform: translateY(-3px); 
+            box-shadow: 0 8px 25px rgba(0, 210, 255, 0.4); 
+        }}
     </style>
 </head>
 <body>
     <div class="dashboard">
-        <h1>Joke-O-Matic AI</h1>
-        <div class="chat-bubble">
-            {ai_response}
+        <h1>Joke-O-Matic 9000</h1>
+        
+        <div class="chat-container">
+            <div class="robot-avatar">🤖</div>
+            <div class="chat-bubble">
+                {ai_response}
+            </div>
         </div>
+
         <form action="/" method="get">
-            <input type="text" name="q" placeholder="Type your prompt here..." required autocomplete="off">
-            <button type="submit">Ask</button>
+            <input type="text" name="q" placeholder="Ask for a joke..." required autocomplete="off">
+            <button type="submit">Send ✨</button>
         </form>
     </div>
 </body>
@@ -70,7 +160,7 @@ HTML_TEMPLATE = """
 @app.get("/", response_class=HTMLResponse)
 async def root(q: str = Query(None)):
     if not q:
-        return HTML_TEMPLATE.format(ai_response="Welcome to the Joke-O-Matic 9000! I was going to tell a joke about a blunt pencil, but there's no point—so give me a prompt and let's see if I can do better!")
+        return HTML_TEMPLATE.format(ai_response="Beep boop! ⚡ Welcome to the Joke-O-Matic 9000! Drop a prompt below and let's get this comedy show started! 🎤😎")
 
     adk_message = types.Content(
         role="user",
@@ -99,13 +189,13 @@ async def root(q: str = Query(None)):
                     final_text = event.text
             
             if not final_text:
-                final_text = "I'm speechless! Could you ask me that again?"
+                final_text = "I'm speechless! 🤐 Could you ask me that again?"
                 
             return HTML_TEMPLATE.format(ai_response=final_text.replace('\n', '<br>'))
             
     except Exception as e:
         error_details = traceback.format_exc().replace('\n', '<br>')
-        return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error</h1><p>{error_details}</p></body></html>"
+        return f"<html><body style='background:#111;color:red;padding:2rem;'><h1>System Error 🚨</h1><p>{error_details}</p></body></html>"
 
 if __name__ == "__main__":
     import uvicorn
