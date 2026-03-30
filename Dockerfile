@@ -10,5 +10,4 @@ COPY . .
 ENV PORT=8080
 EXPOSE 8080
 
-# Start MCP SSE server on 8081, wait for it, then start FastAPI on $PORT
-CMD ["sh", "-c", "python server.py & sleep 3 && uvicorn agent:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn agent:app --host 0.0.0.0 --port ${PORT:-8080}"]
