@@ -36,4 +36,4 @@ This app uses a **Cloud-Native** approach:
 * `requirements.txt`: The essential library stack (FastAPI, ADK, etc.).
 
 ---
-**Developed by [Your Name]** *Location: India* | *Track 2: Google Gen AI Academy 2026*
+**Developed by Adwaith** *Location: India* | *Track 2: Google Gen AI Academy 2026*
